@@ -24,7 +24,7 @@ from text_utils import (
 # ==============================
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET_KEY", "super-secret-key") #commit prueba
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "super-secret-key") #commit prueba1
 
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
 ALLOWED_DOMAIN = "gmail.com"  # Cambia esto por tu dominio de Workspace si es necesario
