@@ -21,11 +21,22 @@ app.config.suppress_callback_exceptions = True
 
 # Load data from csv
 def load_data():
+    #Lee los datos del archivo csv.
+    df = pd.read_csv('datos_energia.csv')
+    
+    #Convertir a datetime.
+    df['time'] = pd.to_datetime(df['time'])
+    
+    #Establecer la fecha como índice.
+    df.set_index('time', inplace=True)
+    
+    return df
     # To do: Completar la funciÃ³n 
     
 
 # Cargar datos
 data = load_data()
+
 
 # Graficar serie
 def plot_series(data, initial_date, proy):
@@ -240,4 +251,4 @@ def update_output_div(date, hour, proy):
 
 # Run the server
 if __name__ == "__main__":
-    app.run_server(debug=True)
+    app.run(debug=True) #Actualización para que el servidor se ejecute en modo local.
