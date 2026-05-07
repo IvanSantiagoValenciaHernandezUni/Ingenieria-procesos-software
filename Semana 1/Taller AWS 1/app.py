@@ -251,4 +251,4 @@ def update_output_div(date, hour, proy):
 
 # Run the server
 if __name__ == "__main__":
-    app.run(debug=True) #Actualización para que el servidor se ejecute en modo local.
+    app.run(host="0.0.0.0", port=8050, debug=True) #Actualización para que el servidor se ejecute en modo local.
