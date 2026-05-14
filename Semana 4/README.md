@@ -1,6 +1,6 @@
-Sistema Web de Restaurante de Comidas Rápidas FastBite
+# Sistema Web de Restaurante de Comidas Rápidas FastBite
 
-Requisitos Funcionales (RQF)
+# Requisitos Funcionales (RQF)
 
 1. Gestión de Usuarios:
 Registro de Usuarios: Los clientes podrán registrarse en el sistema ingresando información básica como nombre, correo electrónico y contraseña.
@@ -27,9 +27,10 @@ Estado del Pedido: El sistema notificará cambios en el estado del pedido como �
 Protección de Datos Personales: El sistema garantizará la privacidad de los datos de los usuarios mediante protocolos de seguridad.
 
 
-Requisitos No Funcionales (RQNF)
+# Requisitos No Funcionales (RQNF)
 
 DE PRODUCTO
+
 • Usabilidad (Atributo de Calidad):
 El sistema deberá ser fácil de usar para que los usuarios puedan navegar por el menú y realizar pedidos de manera sencilla.
 
@@ -44,6 +45,7 @@ Control de acceso por roles.
 Protección de información personal y pagos.
 
 • Eficiencia:
+
 • De Rendimiento (Atributo de Calidad):
 El sistema deberá procesar información rápidamente, con:
 Tiempo de respuesta: Máximo 10 segundos.
@@ -55,6 +57,7 @@ El sistema requerirá al menos 15 GB de espacio en disco para almacenar pedidos,
 
 
 DE LA ORGANIZACIÓN
+
 • Ambientales (Restricción):
 El sistema funcionará únicamente mientras el servidor esté encendido y con conexión estable a internet.
 
@@ -66,6 +69,7 @@ El sistema será desarrollado utilizando tecnologías web compatibles y escalabl
 
 
 EXTERNOS
+
 • Regulatorios (Restricción):
 El sistema cumplirá con las leyes de protección de datos personales establecidas en la Ley 1581 de 2012.
 
@@ -73,6 +77,7 @@ El sistema cumplirá con las leyes de protección de datos personales establecid
 El sistema protegerá la información personal de los usuarios evitando el acceso no autorizado.
 
 • Legales:
+
 • Contables (Restricción):
 El sistema garantizará transparencia en el registro de ventas y pedidos realizados.
 
