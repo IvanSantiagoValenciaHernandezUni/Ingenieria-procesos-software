@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 600">
+  <rect width="900" height="600" fill="#211f1c"/>
+  <g fill="#f9c247">
+    <rect x="275" y="95" width="44" height="300" rx="14" transform="rotate(-10 297 245)"/>
+    <rect x="350" y="70" width="44" height="330" rx="14"/>
+    <rect x="430" y="88" width="44" height="310" rx="14" transform="rotate(7 452 243)"/>
+    <rect x="508" y="82" width="44" height="320" rx="14" transform="rotate(13 530 242)"/>
+    <rect x="580" y="116" width="44" height="280" rx="14" transform="rotate(20 602 256)"/>
+  </g>
+  <path d="M248 280h404l-54 214H302Z" fill="#e9272b"/>
+  <path d="M280 318h340l-22 88H302Z" fill="#fff"/>
+  <text x="450" y="382" text-anchor="middle" font-size="56" font-family="Arial" font-weight="900" fill="#e9272b">FB</text>
+</svg>
