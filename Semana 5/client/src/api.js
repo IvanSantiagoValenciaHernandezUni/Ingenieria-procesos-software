@@ -39,6 +39,7 @@ export const api = {
     body: JSON.stringify(payload),
   }),
   getOrder: (id) => request(`/orders/${id}`),
+  getMyOrders: (userId) => request(`/orders?userId=${encodeURIComponent(userId)}`),
   advanceOrder: (id) => request(`/orders/${id}/advance`, {
     method: 'POST',
   }),

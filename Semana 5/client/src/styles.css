@@ -106,8 +106,8 @@ button {
 }
 
 .hero {
-  min-height: 354px;
-  padding: 68px 24px 64px;
+  min-height: 560px;
+  padding: 68px 24px 58px;
   background: linear-gradient(90deg, #e21f25 0%, #d51d21 60%, #c5161b 100%);
   color: #fff;
 }
@@ -137,11 +137,12 @@ button {
 
 .hero-image {
   width: min(800px, 100%);
-  height: 156px;
+  height: clamp(1000px, 38vw, 475px);
   margin-top: 30px;
   display: block;
   object-fit: cover;
-  border-radius: 15px;
+  object-position: center;
+  border-radius: 14px;
 }
 
 .yellow-button,
@@ -575,6 +576,70 @@ button {
   background: #fff;
 }
 
+.orders-page > .section-heading {
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+.orders-page h1 {
+  margin: 0 0 10px;
+  font-size: 38px;
+  line-height: 1.1;
+  font-weight: 900;
+}
+
+.orders-page p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.empty-orders {
+  min-height: 360px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 14px;
+  text-align: center;
+  border-radius: 12px;
+  background: #f7f7f7;
+}
+
+.empty-orders svg {
+  color: var(--red);
+}
+
+.orders-list {
+  display: grid;
+  gap: 16px;
+}
+
+.order-summary-card {
+  min-height: 128px;
+  padding: 18px;
+  display: grid;
+  grid-template-columns: minmax(230px, 0.8fr) minmax(220px, 1fr) 190px;
+  gap: 18px;
+  align-items: center;
+  border: 1px solid #e4e4e4;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.order-summary-card h2 {
+  margin: 0 0 8px;
+}
+
+.order-summary-card button {
+  width: 100%;
+}
+
+.order-summary-items {
+  display: grid;
+  gap: 6px;
+  color: #333;
+}
+
 .tracking-card {
   width: min(852px, calc(100vw - 48px));
   padding: 32px;
@@ -993,17 +1058,45 @@ button {
   top: 94px;
   right: 24px;
   z-index: 20;
-  min-width: 320px;
+  width: min(430px, calc(100vw - 48px));
   min-height: 54px;
   padding: 14px 16px;
-  display: flex;
+  display: grid;
+  grid-template-columns: 26px 1fr auto;
   align-items: center;
   gap: 10px;
-  border-radius: 6px;
+  border: 1px solid #bfe8ca;
+  border-radius: 10px;
   background: #e9f9ed;
   color: #08752b;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.14);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.18);
   font-weight: 700;
+}
+
+.toast span {
+  line-height: 1.35;
+}
+
+.toast button {
+  min-height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  font-weight: 800;
+  color: #fff;
+  background: #111;
+}
+
+.toast-error {
+  border-color: #ffc7c7;
+  background: #fff0f0;
+  color: #b70f16;
+}
+
+.toast-info {
+  border-color: #ffe19a;
+  background: #fff8df;
+  color: #7a5200;
 }
 
 @media (max-width: 900px) {
@@ -1026,7 +1119,13 @@ button {
   }
 
   .hero {
+    min-height: auto;
     padding-top: 42px;
+    padding-bottom: 46px;
+  }
+
+  .hero-image {
+    height: clamp(300px, 58vw, 430px);
   }
 
   .benefits,
@@ -1036,7 +1135,8 @@ button {
   .admin-grid,
   .admin-stats,
   .inventory-grid,
-  .admin-order-card {
+  .admin-order-card,
+  .order-summary-card {
     grid-template-columns: 1fr;
   }
 
@@ -1085,9 +1185,41 @@ button {
   .auth-page {
     background: linear-gradient(100deg, #e02025 0%, #8c0c11 16%, #fff 16%, #fff 84%, #8c0c11 84%, #e02025 100%);
   }
+
+  .delivery-details p {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
 }
 
 @media (max-width: 560px) {
+  .navbar {
+    padding: 10px 14px;
+  }
+
+  .brand {
+    font-size: 27px;
+  }
+
+  .nav-links {
+    gap: 8px;
+  }
+
+  .nav-links button {
+    min-height: 34px;
+    font-size: 13px;
+  }
+
+  .nav-links .pill-nav {
+    min-width: 142px;
+    padding: 0 16px;
+  }
+
+  .hero {
+    padding: 32px 16px 38px;
+  }
+
   .hero h1,
   .cta h2 {
     font-size: 36px;
@@ -1097,11 +1229,28 @@ button {
     font-size: 20px;
   }
 
+  .hero-image {
+    height: clamp(260px, 82vw, 360px);
+    border-radius: 10px;
+  }
+
   .section h2,
   .cart-page h1,
   .menu-page h1,
-  .admin-page h1 {
+  .admin-page h1,
+  .orders-page h1 {
     font-size: 34px;
+  }
+
+  .page-pad,
+  .section {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .section-heading {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .filters button {
@@ -1136,5 +1285,16 @@ button {
   .line-total,
   .delete-button {
     justify-self: start;
+  }
+
+  .toast {
+    right: 16px;
+    width: calc(100vw - 32px);
+    grid-template-columns: 24px 1fr;
+  }
+
+  .toast button {
+    grid-column: 2;
+    width: fit-content;
   }
 }

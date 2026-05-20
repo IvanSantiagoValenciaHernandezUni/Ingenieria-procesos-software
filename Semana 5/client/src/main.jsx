@@ -1,6 +1,7 @@
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import {
+  AlertCircle,
   ArrowRight,
   Check,
   CheckCircle2,
@@ -16,6 +17,7 @@ import {
   Truck,
   User,
   UtensilsCrossed,
+  XCircle,
 } from 'lucide-react'
 import './styles.css'
 import { api } from './api'
@@ -38,6 +40,8 @@ const ORDER_STEPS = [
   { label: 'Entregado', icon: PackageCheck },
 ]
 
+const ACTIVE_ORDER_STATUSES = ['Pendiente', 'Aceptado', 'En Preparacion', 'En Camino']
+
 const FALLBACK_IMAGES = {
   hamburguesas: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=900&q=80',
   pizzas: 'https://images.unsplash.com/photo-1628840042765-356cda07504e?auto=format&fit=crop&w=900&q=80',
@@ -56,13 +60,14 @@ function App() {
   const [page, setPage] = React.useState('home')
   const [products, setProducts] = React.useState([])
   const [cart, setCart] = React.useState([])
-  const [toast, setToast] = React.useState('')
+  const [toast, setToast] = React.useState(null)
   const [user, setUser] = React.useState(() => {
     const savedUser = window.localStorage.getItem('fastbite_user')
     return savedUser ? JSON.parse(savedUser) : null
   })
   const [authMode, setAuthMode] = React.useState('login')
   const [currentOrder, setCurrentOrder] = React.useState(null)
+  const [myOrders, setMyOrders] = React.useState([])
 
   const cartCount = cart.reduce((sum, item) => sum + item.qty, 0)
   const isAdmin = user?.role === 'admin'
@@ -71,8 +76,28 @@ function App() {
     loadProducts()
   }, [])
 
+  React.useEffect(() => {
+    if (!user) {
+      setCurrentOrder(null)
+      setMyOrders([])
+      return
+    }
+
+    loadMyOrders(user.id)
+  }, [user])
+
+  const notify = (message, type = 'success', options = {}) => {
+    setToast({ message, type, ...options })
+  }
+
+  const closeToast = () => {
+    const afterClose = toast?.afterClose
+    setToast(null)
+    afterClose?.()
+  }
+
   const showError = (error) => {
-    setToast(error.message || 'Ocurrio un error')
+    notify(error.message || 'Ocurrio un error', 'error')
   }
 
   const loadProducts = async () => {
@@ -80,6 +105,50 @@ function App() {
       setProducts(await api.getProducts())
     } catch (error) {
       showError(error)
+    }
+  }
+
+  const setActiveOrder = (order) => {
+    setCurrentOrder(order)
+    if (!user) return
+
+    if (ACTIVE_ORDER_STATUSES.includes(order.status)) {
+      window.localStorage.setItem(`fastbite_active_order_${user.id}`, order.id)
+    } else {
+      window.localStorage.removeItem(`fastbite_active_order_${user.id}`)
+    }
+  }
+
+  const loadMyOrders = async (userId = user?.id) => {
+    if (!userId) return []
+
+    try {
+      const orders = await api.getMyOrders(userId)
+      setMyOrders(orders)
+
+      const savedOrderId = window.localStorage.getItem(`fastbite_active_order_${userId}`)
+      const activeOrder = orders.find((order) => order.id === savedOrderId && ACTIVE_ORDER_STATUSES.includes(order.status))
+        || orders.find((order) => ACTIVE_ORDER_STATUSES.includes(order.status))
+
+      setCurrentOrder(activeOrder || null)
+      return orders
+    } catch (error) {
+      showError(error)
+      return []
+    }
+  }
+
+  const refreshCurrentOrder = async () => {
+    if (!currentOrder?.id) return null
+
+    try {
+      const order = await api.getOrder(currentOrder.id)
+      setActiveOrder(order)
+      setMyOrders((current) => current.map((item) => (item.id === order.id ? order : item)))
+      return order
+    } catch (error) {
+      showError(error)
+      return null
     }
   }
 
@@ -92,7 +161,7 @@ function App() {
     if (!user) {
       setAuthMode('login')
       setPage('auth')
-      setToast('Inicia sesion o registrate para continuar')
+      notify('Inicia sesion o registrate para continuar', 'info')
       return false
     }
     return nextAction()
@@ -107,7 +176,7 @@ function App() {
         }
         return [...current, { ...product, qty: 1 }]
       })
-      setToast(`${product.name} agregado al carrito`)
+      notify(`${product.name} agregado al carrito`, 'success')
       return true
     })
   }
@@ -122,7 +191,7 @@ function App() {
 
   const emptyCart = () => {
     setCart([])
-    setToast('Carrito vaciado exitosamente')
+    notify('Carrito vaciado exitosamente', 'success')
   }
 
   const finishOrder = async () => {
@@ -133,21 +202,11 @@ function App() {
         userId: user.id,
         items: cart.map((item) => ({ productId: item.id, quantity: item.qty })),
       })
-      setCurrentOrder(order)
+      setActiveOrder(order)
+      setMyOrders((current) => [order, ...current.filter((item) => item.id !== order.id)])
       setCart([])
-      setToast('Pedido confirmado correctamente')
+      notify('Pedido confirmado correctamente', 'success')
       navigate('tracking')
-    } catch (error) {
-      showError(error)
-    }
-  }
-
-  const advanceOrder = async () => {
-    if (!currentOrder) return
-
-    try {
-      const order = await api.advanceOrder(currentOrder.id)
-      setCurrentOrder(order)
     } catch (error) {
       showError(error)
     }
@@ -161,7 +220,8 @@ function App() {
       if (result.session?.access_token) {
         window.localStorage.setItem('fastbite_token', result.session.access_token)
       }
-      setToast(result.message)
+      await loadMyOrders(result.user.id)
+      notify(result.message, 'success')
       navigate(result.user.role === 'admin' ? 'admin' : 'home')
     } catch (error) {
       showError(error)
@@ -170,14 +230,17 @@ function App() {
 
   const register = async ({ name, email, password, confirmPassword }) => {
     if (password !== confirmPassword) {
-      setToast('Las contrasenas no coinciden')
+      notify('Las contrasenas no coinciden', 'error')
       return
     }
 
     try {
       const result = await api.register({ name, email, password })
-      setAuthMode('login')
-      setToast(`${result.message}. Ahora inicia sesion`)
+      notify(result.message, 'success', {
+        actionLabel: 'Aceptar',
+        duration: 5000,
+        afterClose: () => setAuthMode('login'),
+      })
     } catch (error) {
       showError(error)
     }
@@ -185,9 +248,11 @@ function App() {
 
   const logout = () => {
     setUser(null)
+    setCurrentOrder(null)
+    setMyOrders([])
     window.localStorage.removeItem('fastbite_user')
     window.localStorage.removeItem('fastbite_token')
-    setToast('Sesion cerrada')
+    notify('Sesion cerrada', 'success')
     navigate('home')
   }
 
@@ -218,8 +283,20 @@ function App() {
         {page === 'tracking' && (
           <Tracking
             order={currentOrder}
-            onNext={advanceOrder}
             onNavigate={navigate}
+            onRefresh={refreshCurrentOrder}
+          />
+        )}
+        {page === 'orders' && (
+          <MyOrders
+            orders={myOrders}
+            currentOrder={currentOrder}
+            onNavigate={navigate}
+            onRefresh={loadMyOrders}
+            onTrack={(order) => {
+              setActiveOrder(order)
+              navigate('tracking')
+            }}
           />
         )}
         {page === 'auth' && (
@@ -230,10 +307,10 @@ function App() {
             onRegister={register}
           />
         )}
-        {page === 'admin' && <Admin onNavigate={navigate} onTrackOrder={setCurrentOrder} onToast={setToast} />}
+        {page === 'admin' && <Admin onNavigate={navigate} onTrackOrder={setCurrentOrder} onToast={notify} />}
       </main>
 
-      {toast && <Toast message={toast} onClose={() => setToast('')} />}
+      {toast && <Toast toast={toast} onClose={closeToast} />}
     </>
   )
 }
@@ -247,6 +324,7 @@ function Navbar({ cartCount, isAdmin, user, page, onNavigate, onLogout }) {
       <nav className="nav-links">
         <button className={page === 'home' ? 'active' : ''} onClick={() => onNavigate('home')}>INICIO</button>
         <button className={page === 'menu' ? 'active' : ''} onClick={() => onNavigate('menu')}>MENU</button>
+        {user && <button className={page === 'orders' || page === 'tracking' ? 'active' : ''} onClick={() => onNavigate('orders')}>MIS PEDIDOS</button>}
         <button className="pill-nav" onClick={() => onNavigate('menu')}>ORDENAR AHORA</button>
         {isAdmin && <button onClick={() => onNavigate('admin')}>ADMIN</button>}
         <button className="icon-button" onClick={() => onNavigate('cart')} aria-label="Carrito">
@@ -443,9 +521,79 @@ function Cart({ cart, onNavigate, onQty, onRemove, onEmpty, onFinish }) {
   )
 }
 
-function Tracking({ order, onNext, onNavigate }) {
+function MyOrders({ orders, currentOrder, onNavigate, onRefresh, onTrack }) {
+  React.useEffect(() => {
+    onRefresh()
+    const id = window.setInterval(onRefresh, 5000)
+    return () => window.clearInterval(id)
+  }, [])
+
+  return (
+    <section className="orders-page page-pad">
+      <div className="section-heading">
+        <div>
+          <h1>Mis Pedidos</h1>
+          <p>Revisa el estado de tus compras recientes.</p>
+        </div>
+        <button className="outline-red small" onClick={onRefresh}>ACTUALIZAR</button>
+      </div>
+
+      {orders.length === 0 && (
+        <div className="empty-orders">
+          <ShoppingCart size={64} />
+          <h2>No tienes pedidos todavia</h2>
+          <p>Cuando confirmes una compra, aparecera aqui.</p>
+          <button className="primary-button small" onClick={() => onNavigate('menu')}>VER MENU</button>
+        </div>
+      )}
+
+      <div className="orders-list">
+        {orders.map((order) => {
+          const active = ACTIVE_ORDER_STATUSES.includes(order.status)
+          return (
+            <article className="order-summary-card" key={order.id}>
+              <div>
+                <h2>{order.code || 'Pedido'}</h2>
+                <p>{order.items?.length || 0} productos - Total ${Number(order.total).toFixed(2)}</p>
+                <span className={`status-pill status-${order.status.replace(/\s/g, '-').toLowerCase()}`}>{order.status}</span>
+              </div>
+              <div className="order-summary-items">
+                {(order.items || []).slice(0, 3).map((item) => (
+                  <span key={`${order.id}-${item.productId}-${item.name}`}>{item.quantity}x {item.name}</span>
+                ))}
+              </div>
+              <button className={currentOrder?.id === order.id ? 'primary-button small' : 'outline-red small'} onClick={() => onTrack(order)}>
+                {active ? 'VER SEGUIMIENTO' : 'VER DETALLE'}
+              </button>
+            </article>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
+function Tracking({ order, onNavigate, onRefresh }) {
   const step = order?.statusIndex || 0
-  const delivered = step === ORDER_STEPS.length - 1
+  const finished = order?.status === 'Entregado' || order?.status === 'Cancelado'
+  const delivered = order?.status === 'Entregado'
+
+  React.useEffect(() => {
+    if (!order?.id || finished) return undefined
+    const id = window.setInterval(onRefresh, 5000)
+    return () => window.clearInterval(id)
+  }, [finished, order?.id])
+
+  if (!order) {
+    return (
+      <section className="empty-cart">
+        <PackageCheck size={78} />
+        <h1>No tienes un pedido activo</h1>
+        <p>Cuando confirmes una compra, podras seguirla aqui.</p>
+        <button className="primary-button small" onClick={() => onNavigate('orders')}>MIS PEDIDOS</button>
+      </section>
+    )
+  }
 
   return (
     <section className="tracking-page page-pad">
@@ -468,17 +616,18 @@ function Tracking({ order, onNext, onNavigate }) {
           </div>
         )}
         <div className="tracking-actions">
-          <button className="primary-button" onClick={delivered ? () => onNavigate('menu') : onNext}>
-            {delivered ? 'HACER NUEVO PEDIDO' : 'AVANZAR ESTADO'}
+          <button className="primary-button" onClick={finished ? () => onNavigate('menu') : onRefresh}>
+            {finished ? 'HACER NUEVO PEDIDO' : 'ACTUALIZAR ESTADO'}
           </button>
-          <button className="outline-red" onClick={() => onNavigate('home')}>VOLVER AL INICIO</button>
+          <button className="outline-red" onClick={() => onNavigate('orders')}>MIS PEDIDOS</button>
         </div>
       </div>
       <div className="delivery-details">
         <h2>Detalles de Entrega</h2>
+        <p><span>Cliente:</span><strong>{order?.customerName || order?.customerEmail || 'Cliente FastBite'}</strong></p>
         <p><span>Direccion:</span><strong>{order?.deliveryAddress || 'Calle Principal 123, Ciudad'}</strong></p>
         <p><span>Tiempo estimado:</span><strong>{order?.estimatedTime || '30 minutos'}</strong></p>
-        <p><span>Repartidor:</span><strong>{order?.courier || 'Juan Perez'}</strong></p>
+        <p><span>Cuenta:</span><strong>{order?.customerEmail || order?.courier || 'Cliente FastBite'}</strong></p>
       </div>
     </section>
   )
@@ -500,22 +649,15 @@ function Auth({ mode, onMode, onLogin, onRegister }) {
       >
         <h1>{isLogin ? 'Iniciar Sesion' : 'Crear Cuenta'}</h1>
         <p>{isLogin ? 'Ingresa a tu cuenta de FastBite' : 'Unete a FastBite hoy'}</p>
-        {!isLogin && <input value={form.name} onChange={(event) => update('name', event.target.value)} placeholder="Nombre Completo" />}
-        <input type="email" value={form.email} onChange={(event) => update('email', event.target.value)} placeholder="Correo Electronico" />
-        <input type="password" value={form.password} onChange={(event) => update('password', event.target.value)} placeholder="Contrasena" />
-        {!isLogin && <input type="password" value={form.confirmPassword} onChange={(event) => update('confirmPassword', event.target.value)} placeholder="Confirmar Contrasena" />}
+        {!isLogin && <input required value={form.name} onChange={(event) => update('name', event.target.value)} placeholder="Nombre Completo" />}
+        <input required type="email" value={form.email} onChange={(event) => update('email', event.target.value)} placeholder="Correo Electronico" />
+        <input required minLength={isLogin ? undefined : 8} type="password" value={form.password} onChange={(event) => update('password', event.target.value)} placeholder="Contrasena" />
+        {!isLogin && <input required minLength={8} type="password" value={form.confirmPassword} onChange={(event) => update('confirmPassword', event.target.value)} placeholder="Confirmar Contrasena" />}
         {!isLogin && <p className="password-hint">Minimo 8 caracteres, una mayuscula, una minuscula, un numero y un caracter especial.</p>}
         <button className="primary-button" type="submit">{isLogin ? 'INICIAR SESION' : 'CREAR CUENTA'}</button>
         <button className="link-button" type="button" onClick={() => onMode(isLogin ? 'register' : 'login')}>
           {isLogin ? 'No tienes cuenta? Registrate aqui' : 'Ya tienes cuenta? Inicia sesion'}
         </button>
-        {isLogin && (
-          <div className="test-credentials">
-            <strong>Credenciales de prueba:</strong>
-            <span>Usuario normal: registra una cuenta nueva</span>
-            <span>Admin: admin@fastbite.com / admin</span>
-          </div>
-        )}
       </form>
     </section>
   )
@@ -544,7 +686,7 @@ function Admin({ onNavigate, onTrackOrder, onToast }) {
       setUsers(usersData)
       setProducts(productsData)
     } catch (error) {
-      onToast(error.message || 'No se pudo cargar el panel admin')
+      onToast(error.message || 'No se pudo cargar el panel admin', 'error')
     } finally {
       setLoading(false)
     }
@@ -556,7 +698,7 @@ function Admin({ onNavigate, onTrackOrder, onToast }) {
       setUsers((current) => current.map((item) => (item.id === updated.id ? updated : item)))
       onToast(`Usuario ${updated.active ? 'activado' : 'desactivado'}`)
     } catch (error) {
-      onToast(error.message || 'No se pudo actualizar el usuario')
+      onToast(error.message || 'No se pudo actualizar el usuario', 'error')
     }
   }
 
@@ -567,7 +709,7 @@ function Admin({ onNavigate, onTrackOrder, onToast }) {
       onTrackOrder(updated)
       onToast(`Pedido ${updated.code} actualizado a ${updated.status}`)
     } catch (error) {
-      onToast(error.message || 'No se pudo actualizar el pedido')
+      onToast(error.message || 'No se pudo actualizar el pedido', 'error')
     }
   }
 
@@ -602,6 +744,7 @@ function Admin({ onNavigate, onTrackOrder, onToast }) {
               <article className="admin-order-card" key={order.id}>
                 <div>
                   <h3>{order.code}</h3>
+                  <p>Cliente: {order.customerName || order.customerEmail || 'Cliente FastBite'}</p>
                   <p>{order.items?.length || 0} productos - Total ${Number(order.total).toFixed(2)}</p>
                   <span className={`status-pill status-${order.status.replace(/\s/g, '-').toLowerCase()}`}>{order.status}</span>
                 </div>
@@ -657,12 +800,17 @@ function Admin({ onNavigate, onTrackOrder, onToast }) {
       {!loading && tab === 'users' && (
         <div className="admin-panel">
           <h2>Control de Usuarios</h2>
+          {users.length === 0 && <p className="admin-empty">No hay usuarios registrados en Supabase todavia.</p>}
           <div className="admin-users">
             {users.map((item) => (
               <article key={item.id}>
                 <div>
-                  <strong>{item.email}</strong>
-                  <span>{item.role} - {item.active ? 'activo' : 'desactivado'}</span>
+                  <strong>{item.name || 'Usuario sin nombre'}</strong>
+                  <span>{item.email}</span>
+                  <span>
+                    {item.role} - {item.active ? 'activo' : 'desactivado'}
+                    {item.emailVerified === false ? ' - correo sin verificar' : ''}
+                  </span>
                 </div>
                 <button className="outline-red small" onClick={() => toggleUser(item)}>
                   {item.active ? 'DESACTIVAR' : 'ACTIVAR'}
@@ -676,16 +824,24 @@ function Admin({ onNavigate, onTrackOrder, onToast }) {
   )
 }
 
-function Toast({ message, onClose }) {
+function Toast({ toast, onClose }) {
+  const { message, type = 'success', actionLabel, duration = 3000 } = toast
+  const Icon = type === 'error' ? XCircle : type === 'info' ? AlertCircle : CheckCircle2
+
   React.useEffect(() => {
-    const id = window.setTimeout(onClose, 3000)
+    const id = window.setTimeout(onClose, duration)
     return () => window.clearTimeout(id)
-  }, [onClose])
+  }, [duration, onClose])
 
   return (
-    <div className="toast">
-      <CheckCircle2 size={19} />
-      {message}
+    <div className={`toast toast-${type}`} role="status" aria-live="polite">
+      <Icon size={22} />
+      <span>{message}</span>
+      {actionLabel && (
+        <button type="button" onClick={onClose}>
+          {actionLabel}
+        </button>
+      )}
     </div>
   )
 }

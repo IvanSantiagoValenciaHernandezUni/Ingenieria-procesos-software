@@ -5,9 +5,14 @@ dotenv.config()
 
 const supabaseUrl = process.env.SUPABASE_URL
 const supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 export function hasSupabaseConfig() {
   return Boolean(supabaseUrl && supabaseKey)
+}
+
+export function hasSupabaseServiceConfig() {
+  return Boolean(supabaseUrl && supabaseServiceKey)
 }
 
 export function getSupabaseClient(accessToken) {
@@ -22,6 +27,12 @@ export function getSupabaseClient(accessToken) {
         }
       : undefined,
   })
+}
+
+export function getSupabaseServiceClient() {
+  if (!hasSupabaseServiceConfig()) return null
+
+  return createClient(supabaseUrl, supabaseServiceKey)
 }
 
 export function getBearerToken(req) {
@@ -85,6 +96,8 @@ export function mapOrder(order, items = []) {
     id: order.id,
     code: order.code,
     userId: order.user_id,
+    customerName: order.customerName || order.customer_name || order.profiles?.full_name || '',
+    customerEmail: order.customerEmail || order.customer_email || order.profiles?.email || '',
     status: order.status,
     statusIndex: order.status_index,
     total: Number(order.total),

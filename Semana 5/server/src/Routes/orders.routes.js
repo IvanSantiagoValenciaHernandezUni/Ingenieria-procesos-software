@@ -1,16 +1,51 @@
 import { Router } from 'express'
 import { createId, readDb, writeDb } from '../Services/store.service.js'
-import { extraProducts, getBearerToken, getSupabaseClient, hasSupabaseConfig, mapOrder } from '../Services/supabase.service.js'
+import {
+  extraProducts,
+  getBearerToken,
+  getSupabaseClient,
+  getSupabaseServiceClient,
+  hasSupabaseConfig,
+  mapOrder,
+} from '../Services/supabase.service.js'
 
 const router = Router()
 const statuses = ['Pendiente', 'Aceptado', 'En Preparacion', 'En Camino', 'Entregado', 'Cancelado']
+
+async function getProfilesByUserId(client, userIds) {
+  const ids = [...new Set(userIds.filter(Boolean))]
+  if (!ids.length) return new Map()
+
+  const { data, error } = await client
+    .from('profiles')
+    .select('id, full_name, email')
+    .in('id', ids)
+
+  if (error) return new Map()
+
+  return new Map((data || []).map((profile) => [profile.id, profile]))
+}
+
+async function mapOrdersWithProfiles(client, orders) {
+  const profiles = await getProfilesByUserId(client, orders.map((order) => order.user_id))
+  return orders.map((order) => {
+    const profile = profiles.get(order.user_id)
+    return mapOrder({
+      ...order,
+      customerName: profile?.full_name,
+      customerEmail: profile?.email,
+    }, order.order_items || [])
+  })
+}
 
 router.get('/', async (req, res) => {
   const { userId } = req.query
 
   if (hasSupabaseConfig()) {
-    const supabase = getSupabaseClient(getBearerToken(req))
-    let query = supabase
+    const token = getBearerToken(req)
+    const supabase = getSupabaseClient(token)
+    const queryClient = userId ? supabase : getSupabaseServiceClient() || supabase
+    let query = queryClient
       .from('orders')
       .select('*, order_items(*)')
       .order('created_at', { ascending: false })
@@ -23,7 +58,7 @@ router.get('/', async (req, res) => {
       return res.status(403).json({ message: error.message })
     }
 
-    return res.json(data.map((order) => mapOrder(order, order.order_items || [])))
+    return res.json(await mapOrdersWithProfiles(queryClient, data || []))
   }
 
   const db = await readDb()
@@ -44,7 +79,8 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ message: 'Pedido no encontrado' })
     }
 
-    return res.json(mapOrder(data, data.order_items || []))
+    const [order] = await mapOrdersWithProfiles(supabase, [data])
+    return res.json(order)
   }
 
   const db = await readDb()
@@ -66,6 +102,13 @@ router.post('/', async (req, res) => {
 
   if (hasSupabaseConfig()) {
     const supabase = getSupabaseClient(getBearerToken(req))
+    const profileClient = getSupabaseServiceClient() || supabase
+    const { data: profile } = await profileClient
+      .from('profiles')
+      .select('full_name, email')
+      .eq('id', userId)
+      .maybeSingle()
+
     const productIds = items.map((item) => Number(item.productId))
     const { data: products, error: productsError } = await supabase
       .from('products')
@@ -99,11 +142,14 @@ router.post('/', async (req, res) => {
     const { data: order, error: orderError } = await supabase
       .from('orders')
       .insert({
+        code: `#hf${Math.random().toString(36).slice(2, 7)}`,
         user_id: userId,
         status: statuses[0],
         status_index: 0,
         total,
         delivery_address: deliveryAddress,
+        estimated_time: '30 minutos',
+        courier: profile?.full_name || profile?.email || 'Cliente FastBite',
       })
       .select('*')
       .single()
@@ -121,10 +167,15 @@ router.post('/', async (req, res) => {
       return res.status(403).json({ message: itemsError.message })
     }
 
-    return res.status(201).json(mapOrder(order, savedItems))
+    return res.status(201).json(mapOrder({
+      ...order,
+      customerName: profile?.full_name,
+      customerEmail: profile?.email,
+    }, savedItems))
   }
 
   const db = await readDb()
+  const customer = db.users.find((user) => user.id === userId)
   const orderItems = items.map((item) => {
     const product = db.products.find((candidate) => candidate.id === Number(item.productId))
     if (!product) return null
@@ -149,13 +200,15 @@ router.post('/', async (req, res) => {
     id: createId('ord'),
     code: `#hf${Math.random().toString(36).slice(2, 7)}`,
     userId,
+    customerName: customer?.name || 'Cliente FastBite',
+    customerEmail: customer?.email || '',
     items: orderItems,
     status: statuses[0],
     statusIndex: 0,
     total,
     deliveryAddress,
     estimatedTime: '30 minutos',
-    courier: 'Juan Perez',
+    courier: customer?.name || 'Cliente FastBite',
     createdAt: new Date().toISOString(),
   }
 
@@ -174,7 +227,7 @@ router.patch('/:id/status', async (req, res) => {
       return res.status(400).json({ message: 'Estado no valido' })
     }
 
-    const supabase = getSupabaseClient(getBearerToken(req))
+    const supabase = getSupabaseServiceClient() || getSupabaseClient(getBearerToken(req))
     const { data, error } = await supabase
       .from('orders')
       .update({ status, status_index: statusIndex })
@@ -186,7 +239,8 @@ router.patch('/:id/status', async (req, res) => {
       return res.status(403).json({ message: error.message })
     }
 
-    return res.json(mapOrder(data, data.order_items || []))
+    const [order] = await mapOrdersWithProfiles(supabase, [data])
+    return res.json(order)
   }
 
   const db = await readDb()
@@ -210,7 +264,7 @@ router.patch('/:id/status', async (req, res) => {
 
 router.post('/:id/advance', async (req, res) => {
   if (hasSupabaseConfig()) {
-    const supabase = getSupabaseClient(getBearerToken(req))
+    const supabase = getSupabaseServiceClient() || getSupabaseClient(getBearerToken(req))
     const { data: currentOrder, error: currentError } = await supabase
       .from('orders')
       .select('status_index')
@@ -233,7 +287,8 @@ router.post('/:id/advance', async (req, res) => {
       return res.status(403).json({ message: error.message })
     }
 
-    return res.json(mapOrder(data, data.order_items || []))
+    const [order] = await mapOrdersWithProfiles(supabase, [data])
+    return res.json(order)
   }
 
   const db = await readDb()

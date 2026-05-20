@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { createId, createPasswordHash, publicUser, readDb, writeDb } from '../Services/store.service.js'
-import { getSupabaseClient, hasSupabaseConfig } from '../Services/supabase.service.js'
+import { getSupabaseClient, getSupabaseServiceClient, hasSupabaseConfig } from '../Services/supabase.service.js'
 
 const router = Router()
 const strongPassword = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/
@@ -36,10 +36,30 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ message: error.message })
     }
 
+    const serviceClient = getSupabaseServiceClient()
+    if (serviceClient && data.user) {
+      const { error: profileError } = await serviceClient
+        .from('profiles')
+        .upsert({
+          id: data.user.id,
+          full_name: name.trim(),
+          email: data.user.email || cleanEmail,
+          role: 'cliente',
+          active: true,
+        })
+
+      if (profileError) {
+        console.warn('[auth/register] No se pudo guardar el perfil:', profileError.message)
+      }
+    }
+
+    const requiresEmailConfirmation = !data.session
+
     return res.status(201).json({
-      message: data.session
-        ? 'Cuenta creada correctamente'
-        : 'Cuenta creada correctamente. Revisa la configuracion de confirmacion de correo en Supabase si no puedes iniciar sesion',
+      message: requiresEmailConfirmation
+        ? 'Cuenta creada correctamente. Revisa tu correo para verificarla antes de iniciar sesion'
+        : 'Cuenta creada correctamente',
+      requiresEmailConfirmation,
       user: data.user
         ? {
             id: data.user.id,
@@ -95,7 +115,16 @@ router.post('/login', async (req, res) => {
     })
 
     if (error) {
-      return res.status(401).json({ message: error.message })
+      const emailNotConfirmed = error.message?.toLowerCase().includes('email not confirmed')
+      return res.status(emailNotConfirmed ? 403 : 401).json({
+        message: emailNotConfirmed
+          ? 'Debes verificar tu correo antes de iniciar sesion'
+          : 'Correo o contrasena incorrectos',
+      })
+    }
+
+    if (!data.user?.email_confirmed_at) {
+      return res.status(403).json({ message: 'Debes verificar tu correo antes de iniciar sesion' })
     }
 
     const authedSupabase = getSupabaseClient(data.session?.access_token)
