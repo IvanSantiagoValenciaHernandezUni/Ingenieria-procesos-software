@@ -1,6 +1,9 @@
 import express from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
 import authRoutes from './Routes/auth.routes.js'
 import productRoutes from './Routes/products.routes.js'
 import orderRoutes from './Routes/orders.routes.js'
@@ -10,8 +13,11 @@ dotenv.config()
 
 const app = express()
 const PORT = process.env.PORT || 4000
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+const clientDistPath = path.resolve(__dirname, '../../client/dist')
 const allowedOrigins = [
-  process.env.CLIENT_URL,
+  ...(process.env.CLIENT_URL || '').split(',').map((origin) => origin.trim()),
   'http://localhost:5174',
   'http://127.0.0.1:5174',
 ].filter(Boolean)
@@ -43,6 +49,15 @@ app.use('/api/auth', authRoutes)
 app.use('/api/products', productRoutes)
 app.use('/api/orders', orderRoutes)
 app.use('/api/users', userRoutes)
+
+if (fs.existsSync(clientDistPath)) {
+  app.use(express.static(clientDistPath))
+
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next()
+    return res.sendFile(path.join(clientDistPath, 'index.html'))
+  })
+}
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Ruta no encontrada' })
